@@ -1,0 +1,93 @@
+@startuml Headless E-Commerce Container Diagram
+
+!theme plain
+skinparam componentStyle rectangle
+skinparam backgroundColor white
+
+actor "Customer" as user
+actor "Admin" as admin
+
+package "Frontend (Next.js 16 · React 19)" {
+  component "Home Page\n(SSG — catalog, banner,\nblog preview, reviews)" as home
+  component "Shop / Categories\n(SSR — product listing,\nfiltering, search)" as shop
+  component "Product Detail\n(ISR — product + reviews)" as product
+  component "Cart\n(Client — sessionStorage)" as cart
+  component "Checkout\n(Client — billing/shipping form)" as checkout
+  component "Order Confirmation\n(Client — post-checkout)" as orderConfirm
+  component "Orders / View Order\n(Client + Auth)" as orders
+  component "Auth Pages\n(Login / Register /\nForgot Password)" as auth
+  component "Blog\n(SSG — WP posts)" as blog
+  component "Discounts\n(SSR — sale products,\ncoupons)" as discounts
+}
+
+package "Next.js API Routes (BFF Layer)" {
+  component "POST /api/auth/login\n(JWT via WP jwt-auth)" as loginRoute
+  component "POST /api/auth/register\n(WC Customers API)" as registerRoute
+  component "POST /api/auth/forgot-password\n(WP lostpassword flow)" as forgotRoute
+  component "POST /api/create-order\n(JWT verify + WC order)" as createOrderRoute
+  component "GET /api/orders\n(JWT verify + WC orders)" as ordersRoute
+  component "GET+POST /api/reviews\n(WC product reviews)" as reviewsRoute
+  component "GET /api/products\n(proxy + params)" as productsRoute
+  component "GET /api/categories\n(proxy)" as catsRoute
+  component "GET /api/search\n(WC products search)" as searchRoute
+}
+
+package "WordPress + WooCommerce (Headless Backend)" {
+  component "WooCommerce REST API\n/wp-json/wc/v3/*\n— Products, Categories,\n  Coupons, Orders,\n  Customers, Reviews" as wcApi
+  component "WordPress REST API\n/wp-json/wp/v2/*\n— Posts (Blog),\n  Media, Users" as wpApi
+  component "JWT Auth Plugin\n/wp-json/jwt-auth/v1/token\n— Login, Token Validate" as jwtPlugin
+  component "WP Login\n/wp-login.php\n— Password reset flow" as wpLogin
+}
+
+database "MySQL\n(WordPress DB)" as db
+cloud "Cloudinary\n(Image Storage & CDN)" as cloudinary
+
+' --- User → Frontend ---
+user --> home : Visit store
+user --> shop : Browse products
+user --> cart : Add to cart
+user --> checkout : Place order
+user --> auth : Login / Register
+user --> blog : Read articles
+admin --> wcApi : Manage products,\norders, reviews
+admin --> wpApi : Manage blog posts
+
+' --- Frontend → API Routes ---
+auth --> loginRoute : POST credentials
+auth --> registerRoute : POST new user
+auth --> forgotRoute : POST email
+checkout --> createOrderRoute : POST order data
+orders --> ordersRoute : GET with JWT
+product --> reviewsRoute : GET + POST reviews
+shop --> productsRoute : GET products
+shop --> catsRoute : GET categories
+shop --> searchRoute : GET search
+
+' --- API Routes → WP/WC ---
+loginRoute --> jwtPlugin : Authenticate
+loginRoute --> wpApi : GET /users/me
+registerRoute --> wcApi : POST /customers
+registerRoute --> jwtPlugin : Auto-login
+forgotRoute --> wpLogin : POST lostpassword
+createOrderRoute --> wcApi : POST /orders\n(with customer_id if auth)
+ordersRoute --> wcApi : GET /orders?customer=id
+reviewsRoute --> wcApi : GET+POST /products/reviews
+
+' --- Frontend → WP/WC directly ---
+home --> wcApi : GET featured products (SSG)
+shop --> wcApi : GET products + categories (SSR)
+product --> wcApi : GET product by slug (ISR)
+blog --> wpApi : GET posts + media (SSG)
+discounts --> wcApi : GET on_sale + coupons (SSR)
+
+' --- WP/WC → DB ---
+wcApi --> db : Products, Orders,\nCustomers, Reviews
+wpApi --> db : Posts, Media, Users
+jwtPlugin --> db : Token validation
+wpLogin --> db : User lookup
+
+' --- Images ---
+wcApi ..> cloudinary : Product image URLs
+wpApi ..> cloudinary : Blog image URLs
+
+@enduml
