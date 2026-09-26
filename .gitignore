@@ -1,0 +1,84 @@
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Docker
+# =========================
+docker-compose.override.yml
+*.log
+
+# volumes / runtime data (НЕ КОММИТИТЬ)
+db_data/
+*.sqlite
+*.sqlite3
+
+# =========================
+# WordPress (важно)
+# =========================
+backend/wordpress/wp-content/uploads/*
+!backend/wordpress/wp-content/uploads/.gitkeep
+
+backend/wordpress/wp-content/cache/
+backend/wordpress/wp-content/upgrade/
+
+# если будешь ставить плагины локально
+backend/wordpress/wp-content/plugins/*
+!backend/wordpress/wp-content/plugins/.gitkeep
+
+backend/wordpress/wp-content/themes/*
+!backend/wordpress/wp-content/themes/.gitkeep
+
+# =========================
+# Env files
+# =========================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# =========================
+# Node / Next.js
+# =========================
+node_modules/
+.next/
+out/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Next.js env
+# =========================
+frontend/**/.env
+frontend/**/.env.local
+
+# =========================
+# uploads zip (если используешь вариант с архивом)
+# =========================
+uploads.zip
+*.zip
+
+# =========================
+# IDE
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# backups / dumps
+# =========================
+*.sql
+*.dump
+
+# но если хочешь seed.sql хранить:
+!docker/mysql/seed.sql
+
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat

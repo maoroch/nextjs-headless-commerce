@@ -1,0 +1,116 @@
+@startuml Headless E-Commerce Data Flow
+
+!theme plain
+skinparam backgroundColor white
+skinparam sequenceMessageAlign center
+
+actor "Customer" as user
+participant "Next.js\nFrontend" as next
+participant "Next.js\nAPI Routes\n(BFF)" as bff
+participant "WooCommerce\nREST API" as wc
+participant "WordPress\nREST API" as wp
+participant "JWT Auth\nPlugin" as jwt
+database "MySQL\n(WP DB)" as db
+
+== Browse Products (SSR) ==
+user -> next : GET /shop
+next -> wc : GET /products?per_page=20&status=publish
+next -> wc : GET /products/categories
+wc -> db : SQL Query
+db --> wc : Products + Categories
+wc --> next : JSON Response
+next --> user : HTML (Server Rendered)
+
+== Product Detail + Reviews (ISR) ==
+user -> next : GET /shop/[slug]
+next -> wc : GET /products?slug=product-slug
+wc -> db : SQL Query
+db --> wc : Product data
+wc --> next : WCProduct JSON
+next --> user : HTML (revalidate: 3600s)
+user -> bff : GET /api/reviews?product_id=123
+bff -> wc : GET /products/reviews?product=123
+wc --> bff : WCReview[]
+bff --> user : Reviews JSON
+
+== Authentication — Login ==
+user -> next : POST /api/auth/login\n{email, password}
+next -> bff : Route handler
+bff -> jwt : POST /jwt-auth/v1/token\n{username, password}
+jwt -> db : Verify credentials
+db --> jwt : User valid
+jwt --> bff : {token: "eyJ..."}
+bff -> wp : GET /wp/v2/users/me\nAuthorization: Bearer token
+wp --> bff : {id, email, name, ...}
+bff --> user : {token, user profile}
+
+== Registration ==
+user -> next : POST /api/auth/register\n{firstName, lastName, email, password}
+next -> bff : Route handler
+bff -> wc : POST /wc/v3/customers\n{first_name, last_name, email, password}
+wc -> db : Create customer
+db --> wc : Customer created
+wc --> bff : Customer data
+bff -> jwt : POST /jwt-auth/v1/token (auto-login)
+jwt --> bff : {token: "eyJ..."}
+bff --> user : {token, user profile}
+
+== Forgot Password ==
+user -> next : POST /api/auth/forgot-password\n{email}
+next -> bff : Route handler
+bff -> next : POST /wp-login.php?action=lostpassword
+next --> bff : WP triggers reset email
+bff --> user : Generic success message\n(no email existence leak)
+
+== Checkout & Order Creation ==
+user -> next : POST /api/create-order\n{billing, shipping, line_items, payment_method}
+next -> bff : Route handler
+bff -> bff : Verify JWT (jsonwebtoken)\nextract customer_id if auth
+bff -> wc : POST /wc/v3/orders\n{...orderData, customer_id?}
+wc -> db : Create order
+db --> wc : Order created
+wc --> bff : WCOrder {id, status, total}
+bff --> user : Order data → redirect to\n/order-confirmation/[id]
+
+== Order History (Authenticated) ==
+user -> next : GET /orders (with JWT in header)
+next -> bff : GET /api/orders
+bff -> bff : Verify JWT → extract customer_id
+bff -> wc : GET /wc/v3/orders?customer={id}
+wc -> db : Query orders by customer
+db --> wc : Orders[]
+wc --> bff : WCOrder[]
+bff --> user : Order list
+
+== Submit Review (Authenticated) ==
+user -> next : POST /api/reviews\n{product_id, review, rating}
+next -> bff : Route handler
+bff -> bff : Verify JWT → extract user info
+bff -> wc : POST /wc/v3/products/reviews\n{product_id, review, rating, reviewer}
+wc -> db : Save review
+wc --> bff : WCReview
+bff --> user : Review posted
+
+== Search ==
+user -> next : GET /search?q=organic
+next -> bff : GET /api/search?q=organic
+bff -> wc : GET /products?search=organic&status=publish
+wc -> db : Full-text search
+db --> wc : Matching products
+wc --> bff : WCProduct[]
+bff --> user : Search results (SSR)
+
+== Blog (SSG) ==
+user -> next : GET /blog
+next -> wp : GET /wp/v2/posts?_embed&per_page=20
+wp -> db : Query posts
+db --> wp : Posts + media + terms
+wp --> next : WPPost[]
+next --> user : HTML (revalidate: 3600s)
+
+== Cart (Client-side) ==
+user -> next : Add to Cart
+next -> next : CartContext.addToCart()\nsessionStorage.setItem('cart', ...)
+next --> user : Cart updated (no API call)
+
+@enduml

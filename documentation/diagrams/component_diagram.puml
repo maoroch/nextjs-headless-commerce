@@ -1,0 +1,125 @@
+@startuml Headless E-Commerce Frontend Components
+
+!theme plain
+skinparam componentStyle rectangle
+skinparam backgroundColor white
+
+package "app/ (Next.js App Router)" {
+
+  package "(landing) Route Group" {
+    component "page.tsx\n(Home — SSG)" as homePage
+  }
+
+  package "(auth) Route Group" {
+    component "login/page.tsx\n(Client)" as loginPage
+    component "register/page.tsx\n(Client)" as registerPage
+    component "forgot-password/page.tsx\n(Client)" as forgotPage
+  }
+
+  package "(shop) Route Group" {
+    component "shop/page.tsx\n(SSR — product grid,\nfilter, pagination)" as shopPage
+    component "shop/[slug]/page.tsx\n(ISR — product detail + reviews)" as productPage
+    component "categories/page.tsx\n(SSR)" as catPage
+    component "categories/[slug]/page.tsx\n(SSR)" as catSlugPage
+    component "search/page.tsx\n(SSR)" as searchPage
+    component "discounts/page.tsx\n(SSR)" as discountsPage
+    component "cart/page.tsx\n(Client)" as cartPage
+    component "checkout/page.tsx\n(Client)" as checkoutPage
+    component "order-confirmation/[id]/page.tsx\n(Client)" as orderConfirmPage
+    component "orders/page.tsx\n(Client + Auth)" as ordersPage
+    component "view-order/[id]/page.tsx\n(Client + Auth)" as viewOrderPage
+    component "favourites/page.tsx\n(Client)" as favPage
+  }
+
+  package "(pages) Route Group" {
+    component "blog/page.tsx\n(SSG)" as blogPage
+    component "blog/[slug]/page.tsx\n(SSG)" as blogSlugPage
+  }
+
+  package "API Routes (BFF)" {
+    component "api/auth/login/route.ts\n(JWT token + user profile)" as loginApi
+    component "api/auth/register/route.ts\n(WC customer + JWT)" as registerApi
+    component "api/auth/forgot-password/route.ts\n(WP lostpassword)" as forgotApi
+    component "api/create-order/route.ts\n(JWT verify + WC order)" as createOrderApi
+    component "api/orders/route.ts\n(JWT verify + WC orders)" as ordersApi
+    component "api/reviews/route.ts\n(GET + POST reviews)" as reviewsApi
+    component "api/products/route.ts\n(proxy)" as productsApi
+    component "api/categories/route.ts\n(proxy)" as catsApi
+    component "api/search/route.ts\n(WC product search)" as searchApi
+  }
+}
+
+package "components/" {
+  component "Navbar/NavbarMain.tsx\n(cart count, auth state)" as navbar
+  component "Navbar/Usermenu.tsx\n(login/logout, profile)" as usermenu
+  component "Footer/Footer.tsx" as footer
+  component "AddToCartButton.tsx\n(CartContext)" as addToCart
+  component "FavouriteButton.tsx\n(FavouritesContext)" as favButton
+  component "pages/home/*\n(Banner, Catalog,\nProductCatalog, Blog,\nReviews, Instagram,\nLinkingWords)" as homeBlocks
+}
+
+package "context/ (Client State)" {
+  component "AuthContext.tsx\n(user, token, login,\nlogout — localStorage)" as authCtx
+  component "CartContext.tsx\n(items, addToCart,\nremoveFromCart,\ntotalPrice — sessionStorage)" as cartCtx
+  component "FavouritesContext.tsx\n(favourites — localStorage)" as favCtx
+}
+
+package "lib/" {
+  component "wordpress.ts\n(WP REST + WC REST\nfetch helpers,\ntype definitions,\nproduct/post helpers)" as wpLib
+  component "seo.ts\n(defaultMetadata,\npageMetadata,\ngenerateProductMetadata)" as seoLib
+}
+
+package "types/" {
+  component "product.ts\n(WCProduct, WCCategory,\nWCCoupon interfaces)" as productType
+  component "blog.ts\n(WPPost, WPTerm interfaces)" as blogType
+  component "orders.ts\n(WCOrder, WCLineItem,\nOrderStatus)" as ordersType
+}
+
+' --- Pages → Lib ---
+shopPage --> wpLib : getProducts()\ngetCategories()
+productPage --> wpLib : getProductBySlug()
+productPage --> reviewsApi : GET /api/reviews
+homePage --> wpLib : getProducts()\ngetPosts()
+blogPage --> wpLib : getPosts()
+blogSlugPage --> wpLib : getPostBySlug()
+discountsPage --> wpLib : getSaleProducts()\ngetCoupons()
+catSlugPage --> wpLib : getProducts({category})
+searchPage --> searchApi : fetch /api/search
+
+' --- Pages → SEO ---
+productPage --> seoLib : generateProductMetadata()
+shopPage --> seoLib : getPageMetadata('shop')
+blogPage --> seoLib : getPageMetadata('blog')
+ordersPage --> seoLib : getPageMetadata('orders')
+
+' --- Pages → Context ---
+cartPage --> cartCtx : useCart()
+checkoutPage --> cartCtx : useCart()\nclearCart()
+checkoutPage --> authCtx : useAuth()
+checkoutPage --> createOrderApi : POST /api/create-order
+orderConfirmPage --> ordersApi : GET /api/orders
+ordersPage --> ordersApi : GET /api/orders
+viewOrderPage --> ordersApi : GET /api/orders
+favPage --> favCtx : useFavourites()
+loginPage --> authCtx : login()
+registerPage --> authCtx : login()
+forgotPage --> forgotApi : POST /api/auth/forgot-password
+
+' --- Components → Context ---
+navbar --> cartCtx : totalItems
+usermenu --> authCtx : user, logout
+addToCart --> cartCtx : addToCart()
+favButton --> favCtx : toggleFavourite()
+
+' --- API Routes → WP/WC ---
+loginApi ..> wpLib : Direct WP fetch
+registerApi ..> wpLib : Direct WC fetch
+searchApi ..> wpLib : getProducts({search})
+
+' --- Types usage ---
+wpLib ..> productType : WCProduct, WCCategory
+wpLib ..> blogType : WPPost
+ordersApi ..> ordersType : WCOrder
+createOrderApi ..> ordersType : WCOrder
+
+@enduml
